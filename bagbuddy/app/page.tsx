@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 export default function Home() {
   return (
@@ -49,6 +50,13 @@ export default function Home() {
           >
             Read our docs
           </a>
+          {/* ปุ่ม Register ไปหน้า /register */}
+          <Link
+            href="/register"
+            className="rounded-full border border-solid border-blue-600 bg-blue-600 text-white transition-colors flex items-center justify-center font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px] hover:bg-blue-700 hover:border-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+          >
+            Register
+          </Link>
         </div>
       </main>
       <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
