@@ -1,115 +1,103 @@
-// page.tsx - หน้า login หลัก (entry point)
+// app/login/page.tsx
 "use client";
 
 import { useState } from "react";
-import { loginApi } from "./api";
-import type { LoginForm } from "./types";
-import Link from "next/link";
-import { FcGoogle } from "react-icons/fc";
+import { useRouter } from "next/navigation";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export default function LoginPage() {
-  const [form, setForm] = useState<LoginForm>({ username: "", password: "" });
+  const [identifier, setIdentifier] = useState(""); // username หรือ email
+  const [password, setPassword] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const router = useRouter();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setMsg(null);
+
+    if (!identifier || !password) {
+      setMsg("กรอกชื่อผู้ใช้/อีเมล และรหัสผ่าน");
+      return;
+    }
+
     setLoading(true);
-    setError("");
     try {
-      await loginApi(form);
-      // TODO: handle success (redirect, set token, etc.)
+      // ลองหาโดย user_name ก่อน
+      let { data, error } = await supabaseAdmin
+        .from("account")
+        .select("accountId, role, password")
+        .eq("user_name", identifier)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      // ถ้าไม่พบ ลองหาโดย email
+      if (!data) {
+        const r2 = await supabaseAdmin
+          .from("account")
+          .select("accountId, role, password")
+          .eq("email", identifier)
+          .maybeSingle();
+        if (r2.error) throw r2.error;
+        data = r2.data;
+      }
+
+      if (!data) {
+        setMsg("ไม่พบผู้ใช้");
+        return;
+      }
+      if (data.password !== password) {
+        setMsg("รหัสผ่านไม่ถูกต้อง");
+        return;
+      }
+
+      // เก็บ session แบบง่าย ๆ (dev เท่านั้น)
+      if (typeof window !== "undefined") {
+        localStorage.setItem("accountId", data.accountId);
+        localStorage.setItem("role", data.role);
+      }
+
+      // redirect ตาม role
+      if (data.role === "shop") {
+        router.push("/shopprofile");
+      } else if (data.role === "user") {
+        router.push("/");
+      } else {
+        setMsg(`บทบาทไม่รองรับ: ${data.role}`);
+      }
     } catch (err: any) {
-      setError(err.message || "เกิดข้อผิดพลาด");
+      setMsg(err?.message || String(err));
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-sm space-y-4">
-        <h1
-          className="text-2xl font-bold text-center mb-4"
-          style={{ color: "#1F41BB", fontFamily: "Poppins, sans-serif" }}
-        >
-          เข้าสู่ระบบ
-        </h1>
-
-        {/* ปุ่ม Sign in with Google */}
-        <button
-          type="button"
-          className="w-full flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded font-medium bg-white hover:bg-gray-50 transition-colors text-gray-700"
-          style={{ fontFamily: "Poppins, sans-serif" }}
-          // TODO: ใส่ logic Google SSO ที่นี่
-        >
-          <FcGoogle className="w-5 h-5" />
-          เข้าสู่ระบบด้วย Google
-        </button>
-
-        <div className="flex items-center my-2">
-          <div className="flex-grow h-px bg-gray-200" />
-          <span className="mx-2 text-gray-400 text-xs">หรือ</span>
-          <div className="flex-grow h-px bg-gray-200" />
+    <main>
+      <h1>Login</h1>
+      <form onSubmit={handleSubmit}>
+        <div className="border rounded border-black ">
+          <label>Username or Email</label>
+          <input
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            name="username"
-            value={form.username}
-            onChange={handleChange}
-            placeholder="ชื่อผู้ใช้"
-            className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-[#1F41BB]"
-            required
-          />
+        <div className="border rounded border-black ">
+          <label>Password</label>
           <input
             type="password"
-            name="password"
-            value={form.password}
-            onChange={handleChange}
-            placeholder="รหัสผ่าน"
-            className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-[#1F41BB]"
-            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
           />
-          <div className="flex justify-end">
-            <Link
-              href="/reset-password"
-              className="text-xs text-[#1F41BB] hover:underline"
-              style={{ fontFamily: "Poppins, sans-serif" }}
-            >
-              ลืมรหัสผ่าน?
-            </Link>
-          </div>
-          {error && <div className="text-red-500 text-sm">{error}</div>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2 px-4 rounded bg-[#1F41BB] text-white font-semibold hover:bg-[#17337e] transition disabled:opacity-50"
-            style={{ fontFamily: "Poppins, sans-serif" }}
-          >
-            {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
-          </button>
-        </form>
-
-        <div
-          className="text-center mt-4 text-sm text-gray-600"
-          style={{ fontFamily: "Poppins, sans-serif" }}
-        >
-          ยังไม่มีบัญชี?{" "}
-          <Link
-            href="/register"
-            className="text-[#1F41BB] font-semibold hover:underline"
-          >
-            สร้างบัญชีใหม่
-          </Link>
         </div>
-      </div>
-    </div>
+
+        <button disabled={loading}>{loading ? "..." : "Login"}</button>
+      </form>
+
+      {msg && <p>{msg}</p>}
+    </main>
   );
 }
